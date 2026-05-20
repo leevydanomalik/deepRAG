@@ -39,10 +39,10 @@ class Settings(BaseSettings):
     loop_convergence_threshold: float = 0.15
 
     # NodeRAG
-    noderag_top_k_seeds: int = 12      # shallow vector retrieval
-    noderag_ppr_top_n: int = 30        # deep PPR expansion
+    noderag_top_k_seeds: int = 20      # shallow vector retrieval
+    noderag_ppr_top_n: int = 50        # deep PPR expansion
     noderag_ppr_alpha: float = 0.15    # PPR teleport probability
-    noderag_chunk_top_k: int = 6       # final chunk count after dedup
+    noderag_chunk_top_k: int = 18      # final chunk count after dedup
 
     # API
     api_host: str = "0.0.0.0"

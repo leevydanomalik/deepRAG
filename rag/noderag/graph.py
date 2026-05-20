@@ -118,6 +118,18 @@ def _vector_seed_node(state: NodeRAGState) -> NodeRAGState:
     }
 
 
+_SEED_TYPE_WEIGHTS = {
+    # boost claim-bearing and summary nodes; downweight relationship-only seeds
+    # because relationships rarely carry the actual factual text.
+    "semantic_unit":        1.4,
+    "high_level_overview":  1.3,
+    "high_level_element":   1.1,
+    "entity":               1.0,
+    "attribute":            1.0,
+    "relationship":         0.6,
+}
+
+
 def _ppr_propagate_node(state: NodeRAGState) -> NodeRAGState:
     s = get_settings()
     seeds = state.get("seed_nodes", [])
@@ -125,12 +137,14 @@ def _ppr_propagate_node(state: NodeRAGState) -> NodeRAGState:
         return {"ranked_nodes": [], "ppr_scores": {}, "history": [{"node": "ppr_propagate", "expanded": 0}]}
 
     g = _build_ppr_graph()
-    # personalization vector: 1.0 weight on seeds (proportional to seed cosine score)
+    # personalization vector: seed cosine score × type weight (favor claim/summary nodes)
     personalization = {}
     for s_node in seeds:
         nid = s_node["id"]
         if g.has_node(nid):
-            personalization[nid] = max(float(s_node.get("score", 0.5)), 0.0)
+            base = max(float(s_node.get("score", 0.5)), 0.0)
+            mult = _SEED_TYPE_WEIGHTS.get(s_node.get("node_type", ""), 1.0)
+            personalization[nid] = base * mult
     # guard: if none of the seeds are in the graph, fall back to seeds themselves
     if not personalization:
         ranked_ids = [sd["id"] for sd in seeds][: s.noderag_ppr_top_n]
@@ -169,31 +183,92 @@ def _ppr_propagate_node(state: NodeRAGState) -> NodeRAGState:
 
 
 def _fetch_chunks_node(state: NodeRAGState) -> NodeRAGState:
+    """Hybrid candidate pool:
+       (a) round-robin chunks from PPR-ranked nodes  — structural relevance
+       (b) top-K direct cosine search on chunks       — semantic relevance
+       Then merge, dedup, and re-rank by cosine; return top noderag_chunk_top_k.
+
+    PPR alone is biased toward chunks tied to highly-connected entities, which
+    skews away from formula-heavy / detail-heavy chunks. The naive-style
+    semantic seed restores those chunks. The final cosine rerank decides
+    the order regardless of which path surfaced each candidate.
+    """
     s = get_settings()
-    chunk_ids: list[str] = []
+    nodes = state.get("ranked_nodes", [])
+
+    # (a) graph-structural candidates via round-robin
+    target_struct = max(s.noderag_chunk_top_k * 2, 16)
+    iters = [iter(n.get("chunk_ids") or []) for n in nodes]
+    struct_ids: list[str] = []
     seen: set[str] = set()
-    for n in state.get("ranked_nodes", []):
-        for cid in n.get("chunk_ids") or []:
-            if cid not in seen:
-                chunk_ids.append(cid); seen.add(cid)
-            if len(chunk_ids) >= s.noderag_chunk_top_k:
+    progress = True
+    while progress and len(struct_ids) < target_struct:
+        progress = False
+        for it in iters:
+            if len(struct_ids) >= target_struct:
                 break
-        if len(chunk_ids) >= s.noderag_chunk_top_k:
-            break
+            try:
+                while True:
+                    cid = next(it)
+                    if cid not in seen:
+                        struct_ids.append(cid); seen.add(cid)
+                        progress = True
+                        break
+            except StopIteration:
+                continue
 
     pg = PgStore()
-    chunks = pg.fetch_by_ids(chunk_ids)
-    pg.close()
+    try:
+        q_emb = state.get("q_embedding") or embed_text(state["question"])
+
+        # (b) direct semantic candidates via pgvector cosine on chunks
+        sem_hits = pg.similarity_search(q_emb, k=s.noderag_chunk_top_k * 2)
+        sem_ids = [h["id"] for h in sem_hits if h["id"] not in seen]
+        for cid in sem_ids:
+            seen.add(cid)
+
+        candidate_ids = struct_ids + sem_ids
+        if not candidate_ids:
+            return {
+                "retrieved": [],
+                "history": [{"node": "fetch_chunks", "structural": 0, "semantic": 0, "kept": 0}],
+            }
+
+        # final rerank across the merged pool
+        with pg.conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, source, chunk_index, text, metadata,
+                       1 - (embedding <=> %s::vector) AS rerank_score
+                FROM rag_chunks
+                WHERE id = ANY(%s)
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s;
+                """,
+                (q_emb, candidate_ids, q_emb, s.noderag_chunk_top_k),
+            )
+            cols = [d[0] for d in cur.description]
+            reranked = [dict(zip(cols, row)) for row in cur.fetchall()]
+    finally:
+        pg.close()
     return {
-        "retrieved": chunks,
-        "history": [{"node": "fetch_chunks", "n": len(chunks)}],
+        "retrieved": reranked,
+        "history": [
+            {
+                "node": "fetch_chunks",
+                "structural": len(struct_ids),
+                "semantic": len(sem_ids),
+                "kept": len(reranked),
+            }
+        ],
     }
 
 
 def _generate_node(state: NodeRAGState) -> NodeRAGState:
-    # context = ranked node descriptions + actual chunk text
+    # context = top ranked node descriptions + reranked chunk text
+    # (cap nodes at 8 so chunk text gets enough attention)
     node_lines = []
-    for n in state.get("ranked_nodes", [])[:15]:
+    for n in state.get("ranked_nodes", [])[:8]:
         node_lines.append(f"[{n['node_type']} score={n.get('ppr_score', 0):.4f}] {n['content']}")
     chunk_lines = [
         f"[{c['source']}#{c['chunk_index']}] {c['text']}"
