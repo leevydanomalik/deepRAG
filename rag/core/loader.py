@@ -26,7 +26,15 @@ class Chunk:
 def _read_pdf(path: Path) -> str:
     from pypdf import PdfReader
     reader = PdfReader(str(path))
-    return "\n\n".join(page.extract_text() or "" for page in reader.pages)
+    text = "\n\n".join(page.extract_text() or "" for page in reader.pages)
+    # PDF text extraction can emit NUL and other C0 control bytes that
+    # Postgres rejects in TEXT columns. Strip them.
+    return _strip_control_chars(text)
+
+
+def _strip_control_chars(s: str) -> str:
+    # Drop NUL and ASCII control chars except \t \n \r.
+    return "".join(ch for ch in s if ch >= " " or ch in "\t\n\r")
 
 
 def load_documents(root: str | Path) -> Iterator[tuple[str, str]]:
