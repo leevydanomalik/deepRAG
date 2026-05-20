@@ -42,12 +42,15 @@ class GraphStore:
             self._conn = sqlite3.connect(self.db_path)
             self._conn.enable_load_extension(True)
             self._conn.load_extension(self.extension_path)
+            self._ensure_schema(self._conn)
         return self._conn
 
-    def init_schema(self) -> None:
-        with self.conn:
-            self.conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS graph USING graph()")
-            self.conn.execute(
+    @staticmethod
+    def _ensure_schema(conn: sqlite3.Connection) -> None:
+        """Idempotent CREATE IF NOT EXISTS so reads never see a missing table."""
+        with conn:
+            conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS graph USING graph()")
+            conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS entity_name_idx (
                     name TEXT PRIMARY KEY,
@@ -56,6 +59,11 @@ class GraphStore:
                 )
                 """
             )
+
+    def init_schema(self) -> None:
+        # Connection property already calls _ensure_schema; keep this for
+        # explicit external callers (scripts/reset_stores, build_kg).
+        self._ensure_schema(self.conn)
 
     def wipe(self) -> None:
         with self.conn:
