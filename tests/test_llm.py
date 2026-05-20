@@ -5,8 +5,7 @@ from rag.core.llm import get_chat_model
 
 @patch("rag.core.llm.ChatOpenAI")
 def test_chat_model_configured_for_deepseek(mock_chat, monkeypatch):
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-x")
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
     monkeypatch.setenv("PG_DSN", "x")
     monkeypatch.setenv("NEO4J_PASSWORD", "x")
 
@@ -18,6 +17,6 @@ def test_chat_model_configured_for_deepseek(mock_chat, monkeypatch):
     mock_chat.assert_called_once()
     kwargs = mock_chat.call_args.kwargs
     assert kwargs["model"] == "deepseek-chat"
-    assert kwargs["base_url"] == "https://api.deepseek.com"
+    assert kwargs["base_url"] == "https://api.deepseek.com/v1"
     assert kwargs["api_key"].get_secret_value() == "sk-test"
     assert kwargs["temperature"] == 0.0

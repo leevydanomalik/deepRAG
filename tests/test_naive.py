@@ -4,7 +4,7 @@ from rag.naive.graph import build_graph
 
 
 def _env(monkeypatch):
-    for k in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "PG_DSN", "NEO4J_PASSWORD"):
+    for k in ("LLM_API_KEY", "OPENAI_API_KEY", "PG_DSN", "NEO4J_PASSWORD"):
         monkeypatch.setenv(k, "x")
     from rag.core.config import get_settings
     get_settings.cache_clear()
@@ -22,7 +22,7 @@ def test_naive_graph_invokes_retrieve_then_generate(monkeypatch):
     fake_llm.invoke.return_value = MagicMock(content="answer ok")
 
     with patch("rag.naive.graph.PgStore", return_value=fake_store), \
-         patch("rag.naive.graph.embed_text", return_value=[0.0] * 1536), \
+         patch("rag.naive.graph.embed_text", return_value=[0.0] * 384), \
          patch("rag.naive.graph.get_chat_model", return_value=fake_llm):
         app = build_graph()
         out = app.invoke({"question": "what is alpha?"})

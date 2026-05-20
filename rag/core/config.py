@@ -13,15 +13,19 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # DeepSeek
-    deepseek_api_key: SecretStr
-    deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_model: str = "deepseek-chat"
+    # LLM (OpenAI-compatible: DeepSeek, OpenAI, Z.ai, etc.)
+    llm_api_key: SecretStr
+    llm_base_url: str = "https://api.deepseek.com/v1"
+    llm_model: str = "deepseek-chat"
 
-    # OpenAI embeddings
-    openai_api_key: SecretStr
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dim: int = 1536
+    # Embeddings
+    embedding_provider: str = "local"           # local | openai
+    embedding_model_local: str = "BAAI/bge-small-en-v1.5"   # 384-dim
+    embedding_model_openai: str = "text-embedding-3-small"  # 1536-dim
+    embedding_dim: int = 384                    # set to 1536 if using openai
+
+    # OpenAI key — only required when embedding_provider=openai
+    openai_api_key: SecretStr | None = None
 
     # Postgres
     pg_dsn: str

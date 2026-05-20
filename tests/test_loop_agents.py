@@ -15,7 +15,7 @@ from rag.loop.agents import (
 
 
 def _env(monkeypatch):
-    for k in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "PG_DSN", "NEO4J_PASSWORD"):
+    for k in ("LLM_API_KEY", "OPENAI_API_KEY", "PG_DSN", "NEO4J_PASSWORD"):
         monkeypatch.setenv(k, "x")
     from rag.core.config import get_settings
     get_settings.cache_clear()
