@@ -109,6 +109,7 @@ notebooks/                           per-pattern Jupyter notebooks
 
 ## Docs
 
+- **[RAG patterns — theoretical primer](docs/rag-patterns-theory.md)** — what problem each pattern solves, the research it builds on, when it shines / fails, comparison matrix, and a decision tree for picking a pattern by question shape.
 - **[Architecture & dataflow diagrams](docs/diagrams/architecture.md)** — Mermaid diagrams: system overview, offline pipelines, storage schema, per-pattern dataflows, sequence diagram.
 - **[Design spec](docs/superpowers/specs/2026-05-20-rag-patterns-langgraph-design.md)** — goals, stack, layout, topology per pattern, storage schema, success criteria.
 - **[Implementation plan](docs/superpowers/plans/2026-05-20-rag-patterns-langgraph.md)** — original 24-task TDD plan plus the addendum (Tasks 25-31) documenting the Neo4j → sqlite-graph swap, local-embeddings switch, and NodeRAG addition.
