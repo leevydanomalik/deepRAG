@@ -45,8 +45,10 @@ class PgStore:
         return self._conn
 
     def init_schema(self) -> None:
+        # Avoid str.format() because the SQL contains '{}'::jsonb literals.
+        sql = SCHEMA_SQL.replace("{dim}", str(self.dim))
         with self.conn.cursor() as cur:
-            cur.execute(SCHEMA_SQL.format(dim=self.dim))
+            cur.execute(sql)
 
     def truncate(self) -> None:
         with self.conn.cursor() as cur:
