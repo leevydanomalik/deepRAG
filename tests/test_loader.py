@@ -9,7 +9,7 @@ FIX = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
-    for k in ("LLM_API_KEY", "OPENAI_API_KEY", "PG_DSN", "NEO4J_PASSWORD"):
+    for k in ("LLM_API_KEY", "OPENAI_API_KEY", "PG_DSN"):
         monkeypatch.setenv(k, "x")
     from rag.core.config import get_settings
     get_settings.cache_clear()

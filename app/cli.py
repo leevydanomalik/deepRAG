@@ -50,10 +50,10 @@ def reset(confirm: bool = typer.Option(False, "--confirm")):
     if not confirm:
         typer.echo("Refusing without --confirm.")
         raise typer.Exit(1)
-    from rag.core.neo4j_store import Neo4jStore
+    from rag.core.graph_store import GraphStore
     from rag.core.pg_store import PgStore
     pg = PgStore(); pg.init_schema(); pg.truncate(); pg.close()
-    neo = Neo4jStore(); neo.wipe(); neo.close()
+    gs = GraphStore(); gs.init_schema(); gs.wipe(); gs.close()
     typer.echo("reset done")
 
 

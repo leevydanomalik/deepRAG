@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+# Import from the character submodule directly to avoid pulling in
+# langchain_text_splitters/__init__.py's sentence_transformers chain, which
+# breaks if an incompatible transformers/torch combo is installed.
+from langchain_text_splitters.character import RecursiveCharacterTextSplitter
 
 SUPPORTED_EXTS = {".txt", ".md", ".pdf"}
 

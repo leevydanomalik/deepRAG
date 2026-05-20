@@ -7,7 +7,6 @@ from rag.core.llm import get_chat_model
 def test_chat_model_configured_for_deepseek(mock_chat, monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "sk-test")
     monkeypatch.setenv("PG_DSN", "x")
-    monkeypatch.setenv("NEO4J_PASSWORD", "x")
 
     from rag.core.config import get_settings
     get_settings.cache_clear()

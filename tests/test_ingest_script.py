@@ -7,7 +7,6 @@ from scripts.ingest import run_ingest
 def test_ingest_chunks_and_upserts(tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "x")
     monkeypatch.setenv("PG_DSN", "x")
-    monkeypatch.setenv("NEO4J_PASSWORD", "x")
     from rag.core.config import get_settings
     get_settings.cache_clear()
 

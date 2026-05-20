@@ -30,10 +30,9 @@ class Settings(BaseSettings):
     # Postgres
     pg_dsn: str
 
-    # Neo4j
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: SecretStr
+    # Graph store (sqlite-graph extension)
+    graph_db_path: str = "data/graph.db"
+    graph_extension_path: str = "vendor/libgraph.dylib"
 
     # Loop RAG
     loop_max_iterations: int = 4

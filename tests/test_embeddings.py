@@ -13,7 +13,6 @@ def _clear(monkeypatch):
 def test_embeddings_local_uses_sentence_transformers(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "x")
     monkeypatch.setenv("PG_DSN", "x")
-    monkeypatch.setenv("NEO4J_PASSWORD", "x")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "local")
     _clear(monkeypatch)
 
@@ -26,7 +25,6 @@ def test_embeddings_openai_path(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "x")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-real")
     monkeypatch.setenv("PG_DSN", "x")
-    monkeypatch.setenv("NEO4J_PASSWORD", "x")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
     monkeypatch.setenv("EMBEDDING_DIM", "1536")
     _clear(monkeypatch)
@@ -43,7 +41,6 @@ def test_embeddings_openai_path(monkeypatch):
 def test_embeddings_openai_requires_key(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "x")
     monkeypatch.setenv("PG_DSN", "x")
-    monkeypatch.setenv("NEO4J_PASSWORD", "x")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     _clear(monkeypatch)

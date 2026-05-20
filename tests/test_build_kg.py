@@ -25,7 +25,6 @@ def test_extract_kg_handles_malformed_json():
 def test_run_build_kg_iterates_chunks(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "x")
     monkeypatch.setenv("PG_DSN", "x")
-    monkeypatch.setenv("NEO4J_PASSWORD", "x")
     from rag.core.config import get_settings
     get_settings.cache_clear()
 
@@ -33,16 +32,16 @@ def test_run_build_kg_iterates_chunks(monkeypatch):
     fake_pg.conn.cursor.return_value.__enter__.return_value.fetchall.return_value = [
         ("c1", "src.md", 0, "LangGraph builds DAGs.", {}),
     ]
-    fake_neo = MagicMock()
+    fake_gs = MagicMock()
     fake_llm = MagicMock()
     fake_llm.invoke.return_value = MagicMock(content=json.dumps({
         "entities": [{"name": "LangGraph", "type": "Product", "description": ""}],
         "relations": [],
     }))
     with patch("scripts.build_kg.PgStore", return_value=fake_pg), \
-         patch("scripts.build_kg.Neo4jStore", return_value=fake_neo), \
+         patch("scripts.build_kg.GraphStore", return_value=fake_gs), \
          patch("scripts.build_kg.get_chat_model", return_value=fake_llm):
         e, r = run_build_kg(limit=1)
     assert e == 1 and r == 0
-    fake_neo.init_schema.assert_called_once()
-    fake_neo.merge_entity.assert_called()
+    fake_gs.init_schema.assert_called_once()
+    fake_gs.merge_entity.assert_called()

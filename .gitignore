@@ -11,3 +11,6 @@ data/raw/*
 .DS_Store
 build/
 dist/
+data/graph.db
+data/graph.db-*
+

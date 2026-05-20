@@ -9,7 +9,7 @@ from typing import Any
 from rag.core.config import get_settings
 from rag.core.embeddings import embed_text, get_embeddings
 from rag.core.llm import get_chat_model
-from rag.core.neo4j_store import Neo4jStore
+from rag.core.graph_store import GraphStore
 from rag.core.pg_store import PgStore
 from rag.core.prompts import (
     ANSWER_PROMPT,
@@ -63,11 +63,11 @@ def plan_node(state: LoopState) -> LoopState:
     }
 
 
-def make_do_node(pg_store=None, neo_store=None):
+def make_do_node(pg_store=None, graph_store=None):
     """Factory so tests can inject fakes."""
     def _do(state: LoopState) -> LoopState:
         pg = pg_store or PgStore()
-        neo = neo_store or Neo4jStore()
+        gs = graph_store or GraphStore()
 
         q = state["question"]
         q_emb = embed_text(q)
@@ -77,7 +77,7 @@ def make_do_node(pg_store=None, neo_store=None):
         graph_chunks: list[dict[str, Any]] = []
         if entities:
             try:
-                nodes, edges = neo.expand_subgraph(entities, hops=2)
+                nodes, edges = gs.expand_subgraph(entities, hops=2)
                 ids: list[str] = []
                 seen = set()
                 for n in nodes:
@@ -109,8 +109,8 @@ def make_do_node(pg_store=None, neo_store=None):
 
         if pg_store is None:
             pg.close()
-        if neo_store is None:
-            neo.close()
+        if graph_store is None:
+            gs.close()
 
         return {
             "evidence": evidence,

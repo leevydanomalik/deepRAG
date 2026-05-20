@@ -1,4 +1,4 @@
-"""Graph RAG: extract entities from question → expand Neo4j subgraph →
+"""Graph RAG: extract entities from question → expand SQLite-graph subgraph →
 fetch chunks the entities/relations point to → generate."""
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import re
 
 from langgraph.graph import END, StateGraph
 
+from rag.core.graph_store import GraphStore
 from rag.core.llm import get_chat_model
-from rag.core.neo4j_store import Neo4jStore
 from rag.core.pg_store import PgStore
 from rag.core.prompts import ANSWER_PROMPT, GRAPH_RAG_ENTITY_EXTRACT_PROMPT
 from rag.graph_rag.state import GraphRAGState
@@ -33,9 +33,9 @@ def _extract_entities(state: GraphRAGState) -> GraphRAGState:
 
 
 def _expand_subgraph(state: GraphRAGState) -> GraphRAGState:
-    neo = Neo4jStore()
-    nodes, edges = neo.expand_subgraph(state.get("entities", []), hops=2)
-    neo.close()
+    gs = GraphStore()
+    nodes, edges = gs.expand_subgraph(state.get("entities", []), hops=2)
+    gs.close()
     return {
         "subgraph_nodes": nodes,
         "subgraph_edges": edges,

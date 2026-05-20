@@ -8,10 +8,10 @@ from rag.loop.agents import act_node, check_node, make_do_node, plan_node, shoul
 from rag.loop.state import LoopState
 
 
-def build_graph(pg_store=None, neo_store=None):
+def build_graph(pg_store=None, graph_store=None):
     g = StateGraph(LoopState)
     g.add_node("plan", plan_node)
-    g.add_node("do", make_do_node(pg_store=pg_store, neo_store=neo_store))
+    g.add_node("do", make_do_node(pg_store=pg_store, graph_store=graph_store))
     g.add_node("check", check_node)
     g.add_node("act", act_node)
 

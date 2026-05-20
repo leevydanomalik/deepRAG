@@ -4,7 +4,7 @@ from __future__ import annotations
 from langchain_core.tools import tool
 
 from rag.core.embeddings import embed_text
-from rag.core.neo4j_store import Neo4jStore
+from rag.core.graph_store import GraphStore
 from rag.core.pg_store import PgStore
 
 
@@ -24,13 +24,13 @@ def vector_search(query: str, k: int = 5) -> str:
 @tool
 def kg_lookup(entity_name: str) -> str:
     """Look up an entity in the knowledge graph; returns description + 1-hop neighbors."""
-    neo = Neo4jStore()
-    ent = neo.get_entity(entity_name)
+    gs = GraphStore()
+    ent = gs.get_entity(entity_name)
     if not ent:
-        neo.close()
+        gs.close()
         return f"Entity '{entity_name}' not found."
-    rels = neo.find_relations([entity_name])
-    neo.close()
+    rels = gs.find_relations([entity_name])
+    gs.close()
     lines = [f"Entity: {ent.get('display_name', entity_name)} ({ent.get('type', '?')})",
              f"Description: {ent.get('description', '')}"]
     if rels:

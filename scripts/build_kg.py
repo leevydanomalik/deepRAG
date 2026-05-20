@@ -7,7 +7,7 @@ import re
 import typer
 
 from rag.core.llm import get_chat_model
-from rag.core.neo4j_store import Neo4jStore
+from rag.core.graph_store import GraphStore
 from rag.core.pg_store import PgStore
 from rag.core.prompts import KG_EXTRACTION_PROMPT
 
@@ -36,8 +36,8 @@ def extract_kg_from_chunk(llm, text: str) -> dict:
 
 def run_build_kg(limit: int | None = None) -> tuple[int, int]:
     pg = PgStore()
-    neo = Neo4jStore()
-    neo.init_schema()
+    gs = GraphStore()
+    gs.init_schema()
     llm = get_chat_model(temperature=0.0)
 
     sql = "SELECT id, source, chunk_index, text, metadata FROM rag_chunks ORDER BY source, chunk_index"
@@ -62,7 +62,7 @@ def run_build_kg(limit: int | None = None) -> tuple[int, int]:
             name = (e.get("name") or "").strip()
             if not name:
                 continue
-            neo.merge_entity(
+            gs.merge_entity(
                 name=name,
                 type_=e.get("type", "Other"),
                 description=e.get("description", ""),
@@ -78,7 +78,7 @@ def run_build_kg(limit: int | None = None) -> tuple[int, int]:
                 continue
             if src.lower() not in valid_names or dst.lower() not in valid_names:
                 continue
-            neo.merge_relation(
+            gs.merge_relation(
                 src=src,
                 dst=dst,
                 type_=r.get("type", "RELATED_TO"),
@@ -88,7 +88,7 @@ def run_build_kg(limit: int | None = None) -> tuple[int, int]:
             relations_added += 1
 
     pg.close()
-    neo.close()
+    gs.close()
     typer.echo(f"Done. entities={entities_added} relations={relations_added}")
     return entities_added, relations_added
 
