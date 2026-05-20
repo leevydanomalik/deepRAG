@@ -1,12 +1,18 @@
-# RAG Patterns in LangGraph — Implementation Plan
+# deepRAG — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Reading note (2026-05-21):** Tasks 1-24 below were executed as written for the original four-pattern build, but the storage choice was later switched from **Neo4j → SQLite + sqlite-graph** (Task 25 in the addendum), local embeddings were preferred over OpenAI (Task 26), and a fifth pattern **NodeRAG** was added (Tasks 27-31). The original task bodies still read "Neo4j" — that's preserved as historical record. See the **Addendum (Tasks 25-31)** at the end of this file for the shipped architecture.
+
 **Goal:** Build four RAG patterns (Naive, Agentic, Graph, Loop/PDCA) as LangGraph graphs sharing one PGVector store and one Neo4j graph, exposed via CLI + FastAPI + Streamlit.
+
+> **Updated goal (shipped):** Five patterns (added NodeRAG), one PGVector store with two tables (`rag_chunks` + `noderag_nodes`), one SQLite + sqlite-graph graph store (no Neo4j).
 
 **Architecture:** Single Python package `rag/` with `core/` (LLM/embeddings/stores/loader) + one subpackage per pattern + `registry.py`. App layer (`app/cli.py`, `app/api.py`, `app/ui.py`) calls into the registry. DeepSeek for chat, OpenAI for embeddings, PostgreSQL + pgvector for vectors, Neo4j for graph.
 
 **Tech Stack:** Python 3.11, LangGraph 0.2, LangChain 0.3, DeepSeek chat (OpenAI-compatible), OpenAI text-embedding-3-small, PostgreSQL 16 + pgvector, Neo4j 5, Typer, FastAPI, uvicorn, Streamlit, pytest.
+
+> **Shipped stack:** Python 3.12, LangGraph 0.2, LangChain 0.3, DeepSeek chat, **local `BAAI/bge-small-en-v1.5` (384-dim)** sentence-transformers (OpenAI selectable), PostgreSQL + pgvector, **SQLite + sqlite-graph** (no Neo4j), networkx + python-louvain (NodeRAG), Typer, FastAPI, uvicorn, Streamlit, pytest.
 
 **Spec:** `docs/superpowers/specs/2026-05-20-rag-patterns-langgraph-design.md`
 
@@ -17,35 +23,41 @@
 ## File map
 
 ```
-DIP/
+deepRAG/
 ├── pyproject.toml                  # Task 1
 ├── .gitignore                      # Task 1
-├── .env.example                    # Task 1
+├── .env.example                    # Task 1 (env names later changed in Task 26)
 ├── README.md                       # Task 24
+├── vendor/libgraph.dylib           # Task 25 — sqlite-graph C extension (vendored)
 ├── data/seed/*.md                  # Task 12
 ├── data/raw/.gitkeep               # Task 1
 ├── scripts/ingest.py               # Task 9
 ├── scripts/build_kg.py             # Task 10
+├── scripts/build_noderag.py        # Task 28 — NodeRAG extraction pipeline
 ├── scripts/reset_stores.py         # Task 11
 ├── rag/__init__.py                 # Task 1
 ├── rag/core/__init__.py            # Task 1
-├── rag/core/config.py              # Task 2
-├── rag/core/llm.py                 # Task 3
-├── rag/core/embeddings.py          # Task 4
+├── rag/core/config.py              # Task 2 (extended in Tasks 25, 26, 27)
+├── rag/core/llm.py                 # Task 3 (renamed env vars in Task 26)
+├── rag/core/embeddings.py          # Task 4 (local provider added in Task 26)
 ├── rag/core/loader.py              # Task 5
 ├── rag/core/pg_store.py            # Task 6
-├── rag/core/neo4j_store.py         # Task 7
-├── rag/core/prompts.py             # Task 8 (KG extraction + answer prompts)
+├── rag/core/neo4j_store.py         # Task 7 — DELETED in Task 25
+├── rag/core/graph_store.py         # Task 25 — sqlite-graph adapter
+├── rag/core/noderag_store.py       # Task 27 — pgvector adapter for noderag_nodes
+├── rag/core/prompts.py             # Task 8 (NodeRAG prompts added in Task 28)
 ├── rag/naive/{state,graph}.py      # Task 13
-├── rag/agentic/{state,tools,graph}.py    # Task 14
-├── rag/graph_rag/{state,graph}.py  # Task 15
-├── rag/loop/{state,agents,graph}.py      # Task 16, 17, 18
-├── rag/registry.py                 # Task 19
-├── app/cli.py                      # Task 20
-├── app/api.py                      # Task 21
-├── app/ui.py                       # Task 22
+├── rag/agentic/{state,tools,graph}.py    # Task 14 (Neo4jStore → GraphStore in Task 25)
+├── rag/graph_rag/{state,graph}.py  # Task 15 (Neo4jStore → GraphStore in Task 25)
+├── rag/loop/{state,agents,graph}.py      # Task 16, 17, 18 (Neo4jStore → GraphStore in Task 25)
+├── rag/noderag/{state,graph}.py    # Task 29 — NodeRAG LangGraph (HNSW + PPR)
+├── rag/registry.py                 # Task 19 (noderag added in Task 30)
+├── app/cli.py                      # Task 20 (build-noderag, compare, noderag-stats in Task 30)
+├── app/api.py                      # Task 21 (/noderag/build, /noderag/stats in Task 30)
+├── app/ui.py                       # Task 22 — auto-picks up noderag from /patterns
 ├── notebooks/0[1-4]_*.ipynb        # Task 23
 └── tests/                          # populated alongside each task
+                                    # + test_graph_store, test_noderag, test_build_noderag
 ```
 
 ---
@@ -3232,3 +3244,238 @@ Plan complete and saved to `docs/superpowers/plans/2026-05-20-rag-patterns-langg
 
 1. **Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
 2. **Inline Execution** — Execute tasks in this session using executing-plans, batch execution with checkpoints.
+
+---
+
+# Addendum — Tasks 25-31 (executed 2026-05-21)
+
+After the original 24 tasks shipped a working four-pattern system against a 3-file
+seed corpus, the user requested two architectural shifts and one new pattern.
+These addendum tasks document what was actually built; they don't follow the
+strict TDD micro-step format of Tasks 1-24 because they were executed
+interactively in the main thread with immediate verification rather than
+dispatched to subagents.
+
+---
+
+### Task 25 — Replace Neo4j with SQLite + sqlite-graph
+
+**Why:** Avoid Neo4j install / daemon entirely; ship a single C extension and
+keep the graph file-based.
+
+**Reference:** https://github.com/agentflare-ai/sqlite-graph (v0.1.0-alpha).
+v0.1.0-alpha Cypher has no variable-length paths or aggregations; multi-hop
+expansion is done in Python (BFS) instead.
+
+**Files:**
+- New: `vendor/libgraph.dylib` (built from source on the user's macOS x86_64)
+- New: `rag/core/graph_store.py`
+- New: `tests/test_graph_store.py` (real-extension tests against a tempfile DB)
+- Deleted: `rag/core/neo4j_store.py`, `tests/test_neo4j_store.py`
+- Modified: `rag/agentic/tools.py`, `rag/graph_rag/graph.py`, `rag/loop/agents.py`,
+  `rag/loop/graph.py`, `scripts/build_kg.py`, `scripts/reset_stores.py`, `app/cli.py`
+- Removed `neo4j>=5.24.0` from `pyproject.toml`; added `GRAPH_DB_PATH` and
+  `GRAPH_EXTENSION_PATH` settings.
+
+**Implementation notes:**
+- Each `GraphStore` connection auto-loads `vendor/libgraph.dylib` and calls
+  `_ensure_schema` so reads never error on a missing virtual table.
+- sqlite-graph's `graph_node_add` errors on duplicate ID, but direct
+  `UPDATE graph_nodes SET properties = ?` works — so merges read-modify-update.
+- An `entity_name_idx` table maps lowercased canonical names to the integer
+  node IDs the extension uses internally.
+- `expand_subgraph(seed_names, hops)` does BFS in Python over `graph_edges`
+  to replicate Neo4j's `MATCH p=(seed)-[r:RELATES*1..hops]-(n)`.
+
+**Status:** Done. All 5 patterns work against the new store. 38/38 fast tests
+pass (7 of them new `GraphStore` tests exercising the real `.dylib`).
+
+---
+
+### Task 26 — Switch to local sentence-transformers embeddings + rename LLM env vars
+
+**Why:** Keep document text on-machine, eliminate OpenAI embedding cost,
+generalize the chat client to any OpenAI-compatible provider.
+
+**Files:**
+- Modified: `rag/core/config.py` — `DEEPSEEK_*` → `LLM_*`, added
+  `embedding_provider` (`local|openai`), `embedding_model_local`,
+  `embedding_model_openai`, default `embedding_dim=384`.
+- Modified: `rag/core/llm.py` — uses `llm_api_key`, `llm_base_url`, `llm_model`.
+- Modified: `rag/core/embeddings.py` — `_LocalEmbedder` wraps
+  `sentence_transformers.SentenceTransformer("BAAI/bge-small-en-v1.5")`;
+  `get_embeddings()` dispatches on provider.
+- Modified: `.env.example` to use new names; default `EMBEDDING_PROVIDER=local`.
+- Added: `sentence-transformers>=3.0,<4.0` (pin keeps `transformers<5.0` for
+  torch 2.2 compat); `numpy<2.0` (torch 2.2 incompatible with numpy 2.x).
+- Updated: all tests' env fixtures.
+
+**Workaround:** `from langchain_text_splitters.character import RecursiveCharacterTextSplitter`
+instead of from the package root — the package `__init__.py` pulls in
+`sentence_transformers` which fails on `transformers 5.x` + `torch 2.2`.
+
+**Status:** Done. All embedding-dependent tests pass; integration ingest of
+the LoopRAG PDF (161 chunks × 384-dim) verified.
+
+---
+
+### Task 27 — NodeRAG storage schema (`noderag_store.py`)
+
+**Why:** NodeRAG (Xu et al. 2025) requires per-node embeddings across six
+heterogeneous node types. The existing `rag_chunks` table is chunk-level only.
+
+**Files:**
+- New: `rag/core/noderag_store.py` — new pgvector table `noderag_nodes`:
+  ```sql
+  CREATE TABLE noderag_nodes (
+      id TEXT PRIMARY KEY,
+      node_type TEXT NOT NULL,       -- six allowed values, see NODE_TYPES
+      content TEXT NOT NULL,
+      metadata JSONB DEFAULT '{}',
+      embedding VECTOR({dim}) NOT NULL,
+      chunk_ids TEXT[] DEFAULT '{}',  -- back-refs to rag_chunks
+      created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE INDEX noderag_nodes_embedding_idx ON noderag_nodes USING hnsw (embedding vector_cosine_ops);
+  CREATE INDEX noderag_nodes_type_idx ON noderag_nodes (node_type);
+  ```
+- API: `init_schema`, `truncate`, `upsert_node`, `count`, `counts_by_type`,
+  `vector_search(query_embedding, k, node_types=None)`, `fetch_by_ids`,
+  `all_nodes_minimal`, `close`.
+- New config keys: `noderag_top_k_seeds=20`, `noderag_ppr_top_n=50`,
+  `noderag_ppr_alpha=0.15`, `noderag_chunk_top_k=18` (final tuned values).
+
+**NODE_TYPES:** entity, relationship, semantic_unit, attribute,
+high_level_element, high_level_overview.
+
+---
+
+### Task 28 — NodeRAG extraction pipeline (`scripts/build_noderag.py`)
+
+**Five-stage pipeline:**
+
+1. Load chunks from pgvector.
+2. Per chunk, two LLM extraction calls:
+   - `NODERAG_SEMANTIC_UNIT_PROMPT` → atomic factual claims + the entities they reference.
+   - `NODERAG_ATTRIBUTE_PROMPT` → `entity.name = value` triples.
+3. Harvest entities + relationships from sqlite-graph (built by Task 10).
+4. Embed and upsert all four base types into `noderag_nodes`.
+5. Build heterogeneous networkx graph:
+   - entity-entity from sqlite-graph relations (weight 1.0)
+   - semantic_unit ↔ entity from extracted entity names (weight 0.7)
+   - attribute ↔ entity from attribute owner (weight 0.5)
+
+   Run Louvain via `python-louvain`; for each community ≥ 3 members:
+   - create `high_level_element` node (community label + member list)
+   - LLM-summarize members → `high_level_overview` node (`NODERAG_COMMUNITY_SUMMARY_PROMPT`)
+
+**Cost guardrails:** `--limit N` for testing, `--skip-communities` to skip stages 5–8.
+
+**Files:**
+- New: `scripts/build_noderag.py`
+- Modified: `rag/core/prompts.py` — added `NODERAG_SEMANTIC_UNIT_PROMPT`,
+  `NODERAG_ATTRIBUTE_PROMPT`, `NODERAG_COMMUNITY_SUMMARY_PROMPT`.
+- Added deps: `networkx>=3.3`, `python-louvain>=0.16`.
+
+---
+
+### Task 29 — NodeRAG LangGraph (`rag/noderag/`)
+
+**Topology:** `embed_query → vector_seed → ppr_propagate → fetch_chunks → generate`.
+
+- `vector_seed`: HNSW cosine top-`top_k_seeds` across all node types.
+- `ppr_propagate`: build PPR graph (cached via `lru_cache`):
+   - entity-entity edges from sqlite-graph relations
+   - semantic_unit ↔ entity from `metadata.entities`
+   - attribute ↔ entity from `metadata.entity`
+
+  Personalization vector = `cosine_score × seed_type_weight` per seed, where
+  `_SEED_TYPE_WEIGHTS = {semantic_unit: 1.4, high_level_overview: 1.3,
+   high_level_element: 1.1, entity: 1.0, attribute: 1.0, relationship: 0.6}`.
+  Run `networkx.pagerank(alpha=1 - ppr_alpha)`. Return top-`ppr_top_n` ranked nodes.
+
+- `fetch_chunks`: **hybrid candidate pool** —
+   - (a) round-robin chunk_ids from PPR-ranked nodes (structural relevance)
+   - (b) top-`chunk_top_k × 2` direct cosine on `rag_chunks` (semantic relevance)
+
+  Merge, dedupe, re-rank by cosine to the query embedding, keep top-`chunk_top_k`.
+  This fixes PPR's bias toward chunks tied to highly-connected entities;
+  formula/detail-heavy chunks often have few graph neighbors and would
+  otherwise be missed.
+
+- `generate`: prompt includes top-8 ranked node descriptions + reranked chunk text.
+
+**Files:**
+- New: `rag/noderag/__init__.py`, `rag/noderag/state.py`, `rag/noderag/graph.py`
+- New: `tests/test_noderag.py` (mocked LLM + stores)
+
+---
+
+### Task 30 — Wire NodeRAG into registry / CLI / API / UI
+
+- `rag/registry.py`: 5th pattern `"noderag"`.
+- `app/cli.py`: new commands `build-noderag`, `noderag-stats`, `compare`.
+- `app/api.py`: new endpoints `POST /noderag/build`, `GET /noderag/stats`.
+- `app/ui.py`: dropdown auto-fetches from `/patterns` — no code change needed.
+- `tests/test_registry.py`: assert 5 patterns.
+- `tests/test_build_noderag.py`: mocked-pipeline coverage.
+
+---
+
+### Task 31 — Run + tune NodeRAG against the LoopRAG paper
+
+**Initial run:** Built index over 161 chunks of the Bai et al. 2026 paper.
+Result: 603 entities + 700 relations + 1,037 semantic_units + 637 attributes +
+69 communities (high_level_element + high_level_overview = 138 nodes). Total
+3,075 NodeRAG nodes in pgvector.
+
+**First failure mode:** On the question "What is LoopRAG's three-axis
+deviation signal, and what does each axis measure?", NodeRAG returned
+"I don't know" while agentic produced full LaTeX formulas. Root cause
+investigation showed:
+- PPR was dominated by the LoopRAG entity (40 chunk_ids, PPR score 0.27 vs
+  next 0.026), and round-robin drained its chunks in extraction order (not
+  relevance order).
+- The key chunk #59 (which explicitly names the three axes) sits at cosine
+  rank 16 globally — below the original `chunk_top_k=12`.
+
+**Fix (committed):**
+1. **Hybrid candidate pool** — PPR-derived chunks ∪ direct semantic chunks.
+2. **Cosine re-rank** of the merged pool before final selection.
+3. Defaults: `top_k_seeds 12→20`, `ppr_top_n 30→50`, `chunk_top_k 6→18`.
+4. Seed-type weights down-weight relationship (0.6) and up-weight
+   semantic_unit (1.4) / high_level_overview (1.3).
+5. Capped ranked-node prompt lines at 8 (was 15) so chunk text gets more
+   attention.
+
+**Result:** NodeRAG now correctly names all three axes and runs in 1.2s
+(vs Loop's 16s on the same question, with Loop still failing). Five-way
+`compare` produces visibly different traces with the expected pattern-by-question
+strength profile documented in the spec.
+
+---
+
+## Addendum self-review (Tasks 25-31)
+
+**Spec coverage:**
+
+| Spec section          | Where built |
+|-----------------------|-------------|
+| sqlite-graph swap     | Task 25 |
+| Local embeddings      | Task 26 |
+| Renamed env vars      | Task 26 |
+| NodeRAG storage       | Task 27 |
+| NodeRAG extraction    | Task 28 |
+| NodeRAG retrieval     | Task 29 |
+| NodeRAG integration   | Task 30 |
+| NodeRAG tuning        | Task 31 |
+
+**Type consistency:**
+- `GraphStore` keeps the exact API of the deleted `Neo4jStore` so callers
+  needed only an import swap.
+- `NodeRAGStore` shares the `pgvector` driver path with `PgStore`.
+- All five patterns return the same `{answer, trace, raw}` shape via
+  `registry.run()`.
+
+**Status:** All shipped. Repo pushed to https://github.com/leevydanomalik/deepRAG
+with the `strong_password` literal scrubbed from history via `git filter-repo`.
