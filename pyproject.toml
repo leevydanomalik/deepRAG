@@ -11,6 +11,8 @@ dependencies = [
   "langchain-community>=0.3.0",
   "sentence-transformers>=3.0,<4.0",
   "numpy<2.0",
+  "networkx>=3.3",
+  "python-louvain>=0.16",
   "openai>=1.50.0",
   "psycopg[binary]>=3.2.0",
   "pgvector>=0.3.0",

@@ -7,12 +7,14 @@ from rag.agentic.graph import build_graph as build_agentic
 from rag.graph_rag.graph import build_graph as build_graph_rag
 from rag.loop.graph import build_graph as build_loop
 from rag.naive.graph import build_graph as build_naive
+from rag.noderag.graph import build_graph as build_noderag
 
 REGISTRY: dict[str, Callable] = {
     "naive": build_naive,
     "agentic": build_agentic,
     "graph": build_graph_rag,
     "loop": build_loop,
+    "noderag": build_noderag,
 }
 
 

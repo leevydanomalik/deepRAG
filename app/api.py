@@ -64,3 +64,9 @@ def kg_build(limit: int | None = None):
     from scripts.build_kg import run_build_kg
     e, r = run_build_kg(limit=limit)
     return {"entities": e, "relations": r}
+
+
+@app.post("/noderag/build")
+def noderag_build(limit: int | None = None, skip_communities: bool = False):
+    from scripts.build_noderag import run_build_noderag
+    return run_build_noderag(limit=limit, skip_communities=skip_communities)

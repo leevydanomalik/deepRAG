@@ -91,3 +91,61 @@ from this question. Return STRICT JSON: {{"entities": ["..."]}}.
 Question: {question}
 
 JSON:"""
+
+
+NODERAG_SEMANTIC_UNIT_PROMPT = """Extract atomic factual claims (semantic units) from the
+text below. A semantic unit is a single, self-contained statement of fact that could
+stand alone (subject + predicate + object/value). Return STRICT JSON:
+
+{{
+  "semantic_units": [
+    {{"claim": "...", "entities": ["..."]}}
+  ]
+}}
+
+Rules:
+- Each claim must be ONE atomic fact (no compound sentences with "and").
+- "entities" lists the proper-noun entities the claim references; these MUST be
+  short canonical names that could match other extractions (e.g. "LoopRAG", not
+  "the LoopRAG framework").
+- Skip generic statements with no specific entity (no "researchers have shown").
+- Aim for 3-8 units per chunk; quality over quantity.
+
+Text:
+{text}
+
+JSON:"""
+
+
+NODERAG_ATTRIBUTE_PROMPT = """Extract attributes (named properties with values) of
+specific entities from the text. An attribute is a fact of the form
+"entity HAS_ATTRIBUTE name = value". Return STRICT JSON:
+
+{{
+  "attributes": [
+    {{"entity": "...", "name": "...", "value": "..."}}
+  ]
+}}
+
+Rules:
+- "entity" is a canonical short name matching the entity extraction style.
+- "name" is the attribute name (e.g. "accuracy", "year", "author").
+- "value" is the literal value (number, date, string).
+- Only include attributes with a SPECIFIC value, not vague qualifiers.
+
+Text:
+{text}
+
+JSON:"""
+
+
+NODERAG_COMMUNITY_SUMMARY_PROMPT = """You are summarizing a community of related
+concepts from a knowledge graph. Below are the entities and semantic units that
+were clustered together. Write a one-paragraph overview (max 120 words) that
+captures the central theme.
+
+Community members:
+{members}
+
+Overview:"""
+

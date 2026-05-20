@@ -44,6 +44,18 @@ def build_kg(limit: int = typer.Option(None)):
     typer.echo(f"entities={e} relations={r}")
 
 
+@app.command("build-noderag")
+def build_noderag(
+    limit: int = typer.Option(None, help="Cap number of chunks (for testing)"),
+    skip_communities: bool = typer.Option(False, "--skip-communities"),
+):
+    """Build the heterogeneous-node NodeRAG index (semantic_units, attributes,
+    communities). Requires build-kg to have run first."""
+    from scripts.build_noderag import run_build_noderag
+    out = run_build_noderag(limit=limit, skip_communities=skip_communities)
+    typer.echo(out)
+
+
 @app.command()
 def reset(confirm: bool = typer.Option(False, "--confirm")):
     """Wipe pgvector + Neo4j. Requires --confirm."""
