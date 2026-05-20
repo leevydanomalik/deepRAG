@@ -4,6 +4,10 @@
 **Initial draft:** 2026-05-20
 **Owner:** Leevyd Malik
 
+**See also:** [`../diagrams/architecture.md`](../diagrams/architecture.md) — Mermaid
+dataflow diagrams for system overview, offline pipelines, storage schema, all
+five pattern dataflows, and the end-to-end request/response sequence.
+
 ## Goal
 
 Build a single Python project that implements **five RAG patterns as LangGraph
