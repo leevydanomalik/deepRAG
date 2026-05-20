@@ -57,6 +57,14 @@ def _short(text: str, n: int = 60) -> str:
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
+def _prefill(question: str, pattern: str, available_patterns: list[str]):
+    """Button on_click callback — runs BEFORE widgets render on next rerun,
+    so it's safe to mutate session_state keys that are bound to widgets."""
+    st.session_state["question"] = question
+    if pattern in available_patterns:
+        st.session_state["pattern"] = pattern
+
+
 with st.sidebar:
     st.header("Settings")
     try:
@@ -65,15 +73,10 @@ with st.sidebar:
         patterns = ["naive", "agentic", "graph", "loop", "noderag"]
         st.warning(f"API unreachable at {API}; using static pattern list.")
 
-    # Pattern selector — driven by session_state so sample buttons can override
-    pattern = st.selectbox(
-        "Pattern",
-        patterns,
-        index=patterns.index(st.session_state.get("pattern", patterns[0]))
-        if st.session_state.get("pattern") in patterns
-        else 0,
-        key="pattern",
-    )
+    # Pattern selector — Streamlit reads/writes st.session_state["pattern"]
+    # automatically when key= is set. Sample-button callbacks set it BEFORE
+    # this widget renders on rerun, so the prefill takes effect cleanly.
+    pattern = st.selectbox("Pattern", patterns, key="pattern")
     show_trace = st.toggle("Show trace", value=True)
 
     st.markdown("---")
@@ -94,19 +97,25 @@ with st.sidebar:
     st.subheader("Sample questions")
     st.caption("Click to prefill — direct fact / single-chunk recall")
     for i, (q, pat) in enumerate(SAMPLE_QUESTIONS):
-        if st.button(_short(q), key=f"sample_{i}", use_container_width=True):
-            st.session_state["question"] = q
-            st.session_state["pattern"] = pat
-            st.rerun()
+        st.button(
+            _short(q),
+            key=f"sample_{i}",
+            use_container_width=True,
+            on_click=_prefill,
+            args=(q, pat, patterns),
+        )
 
     st.markdown("---")
     st.subheader("Complex / multi-hop")
     st.caption("Compare patterns on hard questions")
     for i, (q, pat) in enumerate(COMPLEX_QUESTIONS):
-        if st.button(_short(q), key=f"complex_{i}", use_container_width=True):
-            st.session_state["question"] = q
-            st.session_state["pattern"] = pat
-            st.rerun()
+        st.button(
+            _short(q),
+            key=f"complex_{i}",
+            use_container_width=True,
+            on_click=_prefill,
+            args=(q, pat, patterns),
+        )
 
     st.markdown("---")
     st.caption(
