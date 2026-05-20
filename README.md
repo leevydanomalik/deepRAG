@@ -25,9 +25,12 @@ cp .env.example .env   # then edit: LLM_API_KEY, PG_DSN, GRAPH_EXTENSION_PATH
 # 4. Index your corpus + extract KG
 python -m app.cli ingest
 python -m app.cli build-kg
+python -m app.cli build-noderag       # optional, enables NodeRAG pattern
 
 # 5. Ask
 python -m app.cli ask naive "What is LangGraph?"
+python -m app.cli compare "Who created LangGraph?"   # run all 5 patterns side-by-side
+python -m app.cli noderag-stats                       # inspect heterogeneous nodes
 
 # 6. Or serve
 uvicorn app.api:app --reload &
@@ -39,9 +42,30 @@ streamlit run app/ui.py
 | Pattern  | Topology                                                          | When to use |
 |----------|-------------------------------------------------------------------|-------------|
 | naive    | retrieve → generate                                               | baseline |
-| agentic  | agent ⇄ tools (vector_search, kg_lookup)                          | multi-step lookup |
-| graph    | extract entities → expand subgraph (2-hop BFS) → fetch chunks → generate | relationship queries |
-| loop     | plan → do → check ⇄ act (PDCA, three-axis deviation)              | hard/ambiguous queries |
+| agentic  | agent ⇄ tools (vector_search, kg_lookup)                          | multi-step / exploratory queries |
+| graph    | extract entities → 2-hop BFS → fetch chunks → generate            | explicit relationship queries |
+| loop     | plan → do → check ⇄ act (PDCA, three-axis deviation)              | hard / iterative queries |
+| noderag  | embed query → HNSW seeds → Personalized PageRank → fetch chunks → generate | heterogeneous-node retrieval, community-aware |
+
+### NodeRAG (Xu et al. 2025)
+
+Six node types live in a separate pgvector table `noderag_nodes`:
+
+| Node type            | What it is                                         | Created from |
+|----------------------|----------------------------------------------------|--------------|
+| `entity`             | named things (Person, Org, Product, Concept)       | sqlite-graph entity table |
+| `relationship`       | relations promoted to first-class nodes            | sqlite-graph edges |
+| `semantic_unit`      | atomic factual claims                              | LLM extraction per chunk |
+| `attribute`          | named properties of entities                       | LLM extraction per chunk |
+| `high_level_element` | community-level concepts (Louvain clusters)        | networkx community detection |
+| `high_level_overview`| LLM-written summary per community                  | DeepSeek summary call |
+
+Retrieval is dual-stage: shallow HNSW vector search across all node types
+(top-K seeds), then deep Personalized PageRank propagation over the
+heterogeneous graph (networkx), then fetch the source chunks of the
+top-N PPR-ranked nodes.
+
+Build it with `python -m app.cli build-noderag` after `build-kg`.
 
 ## Stack
 
@@ -49,8 +73,9 @@ streamlit run app/ui.py
 |-----------------|--------|
 | LLM (chat)      | DeepSeek `deepseek-chat` via OpenAI-compatible API |
 | Embeddings      | Local `BAAI/bge-small-en-v1.5` via sentence-transformers (384-dim) |
-| Vector store    | PostgreSQL + pgvector |
+| Vector store    | PostgreSQL + pgvector (chunks + heterogeneous nodes) |
 | Graph store     | SQLite + [sqlite-graph](https://github.com/agentflare-ai/sqlite-graph) extension |
+| Graph algorithms | networkx (Personalized PageRank), python-louvain (communities) |
 | Orchestration   | LangGraph 0.2 |
 | CLI / API / UI  | Typer / FastAPI / Streamlit |
 

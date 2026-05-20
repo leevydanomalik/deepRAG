@@ -70,3 +70,12 @@ def kg_build(limit: int | None = None):
 def noderag_build(limit: int | None = None, skip_communities: bool = False):
     from scripts.build_noderag import run_build_noderag
     return run_build_noderag(limit=limit, skip_communities=skip_communities)
+
+
+@app.get("/noderag/stats")
+def noderag_stats():
+    from rag.core.noderag_store import NodeRAGStore
+    nr = NodeRAGStore()
+    out = {"total": nr.count(), "by_type": nr.counts_by_type()}
+    nr.close()
+    return out
